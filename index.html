@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lernblatt</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+  :root {
+    --bg: #eef0f3;
+    --paper: #ffffff;
+    --grid: #dfe6ef;
+    --ink: #1d2733;
+    --muted: #6b7684;
+    --line: #d6dbe2;
+    --accent: #2f6fed;
+    --accent-ink: #ffffff;
+    --live: #e5484d;
+    --ok: #2e9d5b;
+    --panel: #fbfaf6;
+    --card: #ffffff;
+    --shadow: 0 1px 3px rgba(20,30,40,.08), 0 4px 14px rgba(20,30,40,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+  .app { display: flex; flex-direction: column; height: 100%; }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+    background: var(--paper); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .group { display: flex; align-items: center; gap: 4px; padding-right: 8px; margin-right: 2px;
+    border-right: 1px solid var(--line); }
+  .group:last-child { border-right: none; }
+  .spacer { flex: 1; }
+  button { font: inherit; color: inherit; background: transparent; border: 1px solid transparent;
+    border-radius: 10px; height: 38px; min-width: 38px; padding: 0 10px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; }
+  button:hover { background: #f1f3f6; }
+  button.active { background: #e7eefc; border-color: #c7d6f7; color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--line); }
+  button.active .swatch { box-shadow: 0 0 0 2px var(--accent); }
+  .pageinfo { font-size: 13px; color: var(--muted); min-width: 34px; text-align: center; }
+
+  .livebtn { background: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 0 16px; }
+  .livebtn:hover { background: #255fd6; }
+  .livebtn.on { background: var(--live); }
+  .livebtn.on:hover { background: #cf3a3f; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding: 0 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #b7bec8; }
+  .dot.connecting { background: #f2a93b; }
+  .dot.live { background: var(--ok); }
+  .dot.speaking { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { transform: scale(1.5); opacity: .6; } }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; display: flex; min-height: 0; }
+  .board { flex: 1; position: relative; padding: 12px; min-width: 0; }
+  .page { position: absolute; inset: 12px; background-color: var(--paper); border-radius: 6px;
+    box-shadow: var(--shadow);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 20px 20px; overflow: hidden; }
+  canvas#ink { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  .caption { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    max-width: min(80%, 640px); background: rgba(29,39,51,.88); color: #fff; padding: 8px 14px;
+    border-radius: 12px; font-size: 15px; line-height: 1.35; pointer-events: none;
+    opacity: 0; transition: opacity .3s; }
+  .caption.show { opacity: 1; }
+
+  /* ---------- Panel ---------- */
+  .panel { width: 34%; min-width: 280px; max-width: 480px; display: flex; flex-direction: column;
+    background: var(--panel); border-left: 1px solid var(--line); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
+  .notes { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    -webkit-user-select: text; user-select: text; }
+  .empty { color: var(--muted); font-size: 14px; line-height: 1.5; padding: 8px 4px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    box-shadow: var(--shadow); animation: pop .25s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+  .card .t { font-size: 12px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 6px; }
+  .card .f { overflow-x: auto; overflow-y: hidden; padding: 2px 0; font-size: 1.1em; }
+  .card .x { font-size: 14.5px; line-height: 1.5; margin-top: 6px; color: #33404d; }
+  .card .err { color: #b33; font-family: monospace; font-size: 13px; }
+
+  /* ---------- Modal ---------- */
+  .modal-bg { position: fixed; inset: 0; background: rgba(20,28,38,.45); display: none;
+    align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--paper); border-radius: 16px; padding: 20px; width: 100%; max-width: 440px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.2); -webkit-user-select: text; user-select: text; }
+  .modal h3 { margin: 0 0 14px; font-size: 18px; }
+  .modal label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+  .modal input, .modal select { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 10px;
+    padding: 0 10px; font: inherit; font-size: 15px; background: #fff; color: var(--ink); }
+  .modal .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .modal .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .modal .primary { background: var(--accent); color: #fff; font-weight: 600; }
+
+  .toast { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); background: #2a1c1c;
+    color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: 90%;
+    z-index: 20; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+  .toast.show { display: block; }
+
+  /* Hochformat: Panel nach unten */
+  @media (orientation: portrait), (max-width: 760px) {
+    .main { flex-direction: column; }
+    .panel { width: 100%; max-width: none; min-width: 0; height: 34%; border-left: none; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar">
+    <div class="group">
+      <button id="liveBtn" class="livebtn">Live starten</button>
+      <button id="micBtn" title="Mikro stumm" disabled>
+        <svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <span class="status"><span id="dot" class="dot"></span><span id="statusText">Offline</span></span>
+    </div>
+    <div class="group" id="colors">
+      <button class="active" data-color="#1d2733" title="Schwarz"><span class="swatch" style="background:#1d2733"></span></button>
+      <button data-color="#2f6fed" title="Blau"><span class="swatch" style="background:#2f6fed"></span></button>
+      <button data-color="#d64545" title="Rot"><span class="swatch" style="background:#d64545"></span></button>
+      <button data-color="#2e9d5b" title="Grün"><span class="swatch" style="background:#2e9d5b"></span></button>
+    </div>
+    <div class="group">
+      <button id="penBtn" class="active" title="Stift">
+        <svg class="i" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/></svg>
+      </button>
+      <button id="eraserBtn" title="Radierer (ganze Striche)">
+        <svg class="i" viewBox="0 0 24 24"><path d="M7 21h10M5 15l9-9 5 5-7 7H8l-3-3z"/></svg>
+      </button>
+      <button id="undoBtn" title="Rückgängig">
+        <svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+      </button>
+      <button id="clearBtn" title="Seite leeren">
+        <svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+      </button>
+    </div>
+    <div class="group">
+      <button id="prevBtn" title="Vorherige Seite"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <span class="pageinfo" id="pageInfo">1/1</span>
+      <button id="nextBtn" title="Nächste / neue Seite"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="spacer"></div>
+    <button id="settingsBtn" title="Einstellungen">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+
+  <div class="main">
+    <div class="board">
+      <div class="page" id="page">
+        <canvas id="ink"></canvas>
+      </div>
+      <div class="caption" id="caption"></div>
+    </div>
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>Tafel</h2>
+        <button id="panelClear" title="Tafel leeren">Leeren</button>
+      </div>
+      <div class="notes" id="notes">
+        <div class="empty" id="emptyHint">Hier schreibt die KI Formeln, Rechenschritte und Kerngedanken hin, während ihr redet.<br><br>Tipp: Kopfhörer benutzen, dann hört sich die KI nicht selbst.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <h3>Einstellungen</h3>
+    <label for="keyInput">Gemini API-Key</label>
+    <input id="keyInput" type="password" autocomplete="off" placeholder="AIza…">
+    <div class="hint">Wird nur in diesem Browser gespeichert (localStorage). Key holen: aistudio.google.com → „Get API key“.</div>
+    <label for="modelInput">Modell</label>
+    <input id="modelInput" type="text" autocomplete="off">
+    <div class="hint">Standard: gemini-3.1-flash-live-preview</div>
+    <label for="voiceInput">Stimme</label>
+    <select id="voiceInput">
+      <option value="">Standard</option>
+      <option>Puck</option><option>Charon</option><option>Kore</option>
+      <option>Fenrir</option><option>Aoede</option>
+    </select>
+    <div class="row">
+      <button id="settingsCancel">Abbrechen</button>
+      <button id="settingsSave" class="primary">Speichern</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   Einstellungen
+   ========================================================= */
+const DEFAULT_MODEL = 'gemini-3.1-flash-live-preview';
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const settings = {
+  get key() { return store.get('lb_key', ''); },
+  get model() { return store.get('lb_model', DEFAULT_MODEL) || DEFAULT_MODEL; },
+  get voice() { return store.get('lb_voice', ''); }
+};
+
+const $ = (id) => document.getElementById(id);
+const toastEl = $('toast');
+let toastTimer;
+function toast(msg, ms = 6000) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
+}
+
+/* =========================================================
+   Zeichenfläche
+   ========================================================= */
+const canvas = $('ink');
+const ctx = canvas.getContext('2d');
+const pageEl = $('page');
+
+let pages = [[]];
+let pageIndex = 0;
+try {
+  const saved = JSON.parse(store.get('lb_pages', 'null'));
+  if (Array.isArray(saved) && saved.length) pages = saved;
+  const pi = parseInt(store.get('lb_pageIndex', '0'), 10);
+  if (pi >= 0 && pi < pages.length) pageIndex = pi;
+} catch (e) {}
+
+let color = '#1d2733';
+let tool = 'pen';
+let penSeen = false;
+let current = null;
+let activePointer = null;
+let dirty = true;
+
+function strokes() { return pages[pageIndex]; }
+
+let saveTimer;
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    store.set('lb_pages', JSON.stringify(pages));
+    store.set('lb_pageIndex', String(pageIndex));
+  }, 400);
+}
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = pageEl.getBoundingClientRect();
+  canvas.width = Math.round(r.width * dpr);
+  canvas.height = Math.round(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  redraw();
+}
+
+function widthFor(p) { return 1.2 + p * 2.6; }
+
+function drawStroke(c, s) {
+  const pts = s.p;
+  if (!pts.length) return;
+  c.strokeStyle = s.c;
+  c.fillStyle = s.c;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  if (pts.length === 1) {
+    c.beginPath();
+    c.arc(pts[0][0], pts[0][1], widthFor(pts[0][2]) / 2, 0, Math.PI * 2);
+    c.fill();
+    return;
+  }
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    c.lineWidth = widthFor((a[2] + b[2]) / 2);
+    c.beginPath();
+    c.moveTo(a[0], a[1]);
+    c.lineTo(b[0], b[1]);
+    c.stroke();
+  }
+}
+
+function redraw() {
+  const r = pageEl.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+  for (const s of strokes()) drawStroke(ctx, s);
+  $('pageInfo').textContent = (pageIndex + 1) + '/' + pages.length;
+  $('prevBtn').disabled = pageIndex === 0;
+}
+
+function pos(e) {
+  const r = canvas.getBoundingClientRect();
+  const p = e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5;
+  return [Math.round((e.clientX - r.left) * 10) / 10, Math.round((e.clientY - r.top) * 10) / 10, Math.round(p * 100) / 100];
+}
+
+function eraseAt(x, y) {
+  const R = 12;
+  const list = strokes();
+  let changed = false;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].p.some(pt => Math.abs(pt[0] - x) < R && Math.abs(pt[1] - y) < R)) {
+      list.splice(i, 1);
+      changed = true;
+    }
+  }
+  if (changed) { redraw(); markDirty(); }
+}
+
+function markDirty() { dirty = true; persist(); }
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'pen') penSeen = true;
+  // Handballen-Schutz: Sobald ein Stift benutzt wurde, zeichnen Finger nicht mehr
+  if (penSeen && e.pointerType === 'touch') return;
+  if (activePointer !== null) return;
+  activePointer = e.pointerId;
+  canvas.setPointerCapture(e.pointerId);
+  const pt = pos(e);
+  if (tool === 'eraser') { eraseAt(pt[0], pt[1]); return; }
+  current = { c: color, p: [pt] };
+  strokes().push(current);
+  drawStroke(ctx, current);
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== activePointer) return;
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of (evs.length ? evs : [e])) {
+    const pt = pos(ev);
+    if (tool === 'eraser') { eraseAt(pt[0], pt[1]); continue; }
+    if (!current) continue;
+    const last = current.p[current.p.length - 1];
+    if (Math.abs(last[0] - pt[0]) + Math.abs(last[1] - pt[1]) < 0.8) continue;
+    current.p.push(pt);
+    ctx.strokeStyle = current.c;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = widthFor((last[2] + pt[2]) / 2);
+    ctx.beginPath();
+    ctx.moveTo(last[0], last[1]);
+    ctx.lineTo(pt[0], pt[1]);
+    ctx.stroke();
+  }
+});
+
+function endStroke(e) {
+  if (e.pointerId !== activePointer) return;
+  activePointer = null;
+  if (current) { current = null; markDirty(); }
+}
+canvas.addEventListener('pointerup', endStroke);
+canvas.addEventListener('pointercancel', endStroke);
+
+document.querySelectorAll('#colors button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#colors button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    color = b.dataset.color;
+    setTool('pen');
+  });
+});
+function setTool(t) {
+  tool = t;
+  $('penBtn').classList.toggle('active', t === 'pen');
+  $('eraserBtn').classList.toggle('active', t === 'eraser');
+}
+$('penBtn').onclick = () => setTool('pen');
+$('eraserBtn').onclick = () => setTool('eraser');
+$('undoBtn').onclick = () => { if (strokes().length) { strokes().pop(); redraw(); markDirty(); } };
+$('clearBtn').onclick = () => {
+  if (!strokes().length) return;
+  if (confirm('Diese Seite leeren?')) { pages[pageIndex] = []; redraw(); markDirty(); }
+};
+$('prevBtn').onclick = () => { if (pageIndex > 0) { pageIndex--; redraw(); markDirty(); } };
+$('nextBtn').onclick = () => {
+  if (pageIndex === pages.length - 1) {
+    if (!strokes().length) return; // keine leeren Seiten stapeln
+    pages.push([]);
+  }
+  pageIndex++;
+  redraw();
+  markDirty();
+};
+
+window.addEventListener('resize', resizeCanvas);
+new ResizeObserver(resizeCanvas).observe(pageEl);
+resizeCanvas();
+
+/* Snapshot der aktuellen Seite als JPEG (weißer Hintergrund, max 1024px) */
+function snapshotBase64() {
+  const r = pageEl.getBoundingClientRect();
+  const scale = Math.min(1, 1024 / Math.max(r.width, r.height));
+  const off = document.createElement('canvas');
+  off.width = Math.max(1, Math.round(r.width * scale));
+  off.height = Math.max(1, Math.round(r.height * scale));
+  const c = off.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, off.width, off.height);
+  c.scale(scale, scale);
+  for (const s of strokes()) drawStroke(c, s);
+  return off.toDataURL('image/jpeg', 0.75).split(',')[1];
+}
+
+/* =========================================================
+   Tafel (Panel)
+   ========================================================= */
+const notesEl = $('notes');
+function renderMath(el) {
+  if (window.renderMathInElement) {
+    try {
+      window.renderMathInElement(el, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '\\[', right: '\\]', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false }
+        ],
+        throwOnError: false
+      });
+    } catch (e) {}
+  }
+}
+function addNote({ titel, latex, text }) {
+  const hint = $('emptyHint');
+  if (hint) hint.remove();
+  const card = document.createElement('div');
+  card.className = 'card';
+  if (titel) {
+    const t = document.createElement('div');
+    t.className = 't';
+    t.textContent = titel;
+    card.appendChild(t);
+  }
+  if (latex) {
+    const f = document.createElement('div');
+    f.className = 'f';
+    const clean = String(latex).trim().replace(/^\$\$?|\$\$?$/g, '');
+    if (window.katex) {
+      try { window.katex.render(clean, f, { displayMode: true, throwOnError: false }); }
+      catch (e) { f.innerHTML = '<span class="err"></span>'; f.firstChild.textContent = clean; }
+    } else {
+      f.textContent = clean;
+    }
+    card.appendChild(f);
+  }
+  if (text) {
+    const x = document.createElement('div');
+    x.className = 'x';
+    x.textContent = text;
+    card.appendChild(x);
+    renderMath(x);
+  }
+  notesEl.appendChild(card);
+  notesEl.scrollTop = notesEl.scrollHeight;
+}
+$('panelClear').onclick = () => { notesEl.innerHTML = ''; };
+
+/* Untertitel der KI */
+const captionEl = $('caption');
+let captionText = '';
+let captionTimer;
+function caption(add, reset) {
+  if (reset) captionText = '';
+  captionText = (captionText + add).slice(-220);
+  captionEl.textContent = captionText.trim();
+  captionEl.classList.toggle('show', !!captionText.trim());
+  clearTimeout(captionTimer);
+  captionTimer = setTimeout(() => captionEl.classList.remove('show'), 4000);
+}
+
+/* =========================================================
+   Audio
+   ========================================================= */
+const WORKLET = `
+class Capture extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.ratio = sampleRate / 16000;
+    this.pos = 0; this.sum = 0; this.cnt = 0;
+    this.out = new Int16Array(1600); this.n = 0;
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      this.sum += ch[i]; this.cnt++; this.pos += 1;
+      if (this.pos >= this.ratio) {
+        this.pos -= this.ratio;
+        let s = this.sum / this.cnt; this.sum = 0; this.cnt = 0;
+        s = Math.max(-1, Math.min(1, s));
+        this.out[this.n++] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        if (this.n === this.out.length) {
+          const b = this.out.slice(0);
+          this.port.postMessage(b.buffer, [b.buffer]);
+          this.n = 0;
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('capture', Capture);
+`;
+
+let inCtx = null, micStream = null, micNode = null, muted = false;
+let outCtx = null, nextTime = 0;
+const playing = new Set();
+
+function b64FromBuffer(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
+}
+
+async function startMic() {
+  // AudioContext noch innerhalb des Klicks erzeugen (mobile Browser verlangen das)
+  inCtx = new (window.AudioContext || window.webkitAudioContext)();
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+  });
+  if (inCtx.state === 'suspended') await inCtx.resume();
+  const url = URL.createObjectURL(new Blob([WORKLET], { type: 'application/javascript' }));
+  await inCtx.audioWorklet.addModule(url);
+  const src = inCtx.createMediaStreamSource(micStream);
+  micNode = new AudioWorkletNode(inCtx, 'capture');
+  micNode.port.onmessage = (ev) => {
+    if (muted || !ready()) return;
+    send({ realtimeInput: { audio: { data: b64FromBuffer(ev.data), mimeType: 'audio/pcm;rate=16000' } } });
+  };
+  src.connect(micNode);
+  // Worklet muss am Graph hängen, damit er läuft – stumm schalten
+  const sink = inCtx.createGain();
+  sink.gain.value = 0;
+  micNode.connect(sink).connect(inCtx.destination);
+}
+
+function stopMic() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (inCtx) inCtx.close().catch(() => {});
+  micStream = null; inCtx = null; micNode = null;
+}
+
+function ensureOut() {
+  if (!outCtx) outCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (outCtx.state === 'suspended') outCtx.resume();
+}
+
+function playPcm(b64, mime) {
+  if (!outCtx) return;
+  const m = /rate=(\d+)/.exec(mime || '');
+  const rate = m ? parseInt(m[1], 10) : 24000;
+  const bin = atob(b64);
+  const len = bin.length >> 1;
+  if (!len) return;
+  const buf = outCtx.createBuffer(1, len, rate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+    if (v >= 32768) v -= 65536;
+    d[i] = v / 32768;
+  }
+  const src = outCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(outCtx.destination);
+  const t = Math.max(outCtx.currentTime + 0.04, nextTime);
+  src.start(t);
+  nextTime = t + buf.duration;
+  playing.add(src);
+  setSpeaking(true);
+  src.onended = () => {
+    playing.delete(src);
+    if (!playing.size) setSpeaking(false);
+  };
+}
+
+function stopPlayback() {
+  for (const s of playing) { try { s.stop(); } catch (e) {} }
+  playing.clear();
+  nextTime = 0;
+  setSpeaking(false);
+}
+
+/* =========================================================
+   Gemini Live
+   ========================================================= */
+const SYSTEM = `Du bist ein geduldiger, lockerer Nachhilfelehrer und lernst live mit einem Studenten. Ihr sprecht miteinander, während er auf einem karierten Blatt mit dem Stift schreibt.
+
+SPRACHE & STIL
+- Sprich Deutsch, locker und duzend.
+- Halte gesprochene Antworten kurz (meist 1–3 Sätze), dann lass ihn wieder ran.
+- Stille ist Denkzeit. Wenn er gerade nichts sagt, denkt oder rechnet er – füll die Pause nicht.
+
+DAS BLATT
+- Du bekommst laufend Bilder von seinem aktuellen Blatt (Handschrift). Lies es aufmerksam und beziehe dich konkret darauf („in deiner zweiten Zeile…“, „beim Bruch rechts…“).
+- Wenn du etwas nicht lesen kannst, frag kurz nach, statt zu raten.
+
+DIDAKTIK
+- Verrate nicht sofort die Lösung. Gib Hinweise, stell Rückfragen, lass ihn den nächsten Schritt selbst machen.
+- Siehst du einen Fehler, zeig auf die Stelle und frag, ob er ihn selbst findet.
+- Will er ausdrücklich die Lösung oder eine Erklärung, gib sie klar und vollständig.
+
+DIE TAFEL (Werkzeug zeige_notiz) – SEHR WICHTIG
+- Neben dem Blatt gibt es eine Tafel. Mit zeige_notiz schreibst du dort etwas schriftlich hin.
+- Nutze sie IMMER für: Formeln, Gleichungen, Rechenschritte, Definitionen, Merksätze, Zahlenbeispiele, Fachbegriffe, die man sehen muss.
+- Lies Formeln nicht Symbol für Symbol vor. Schreib sie an die Tafel und sag z. B. „schau mal an die Tafel“ und erkläre die Idee dahinter in Worten.
+- Nutze die Tafel NICHT für Smalltalk oder reine Rückfragen.
+- Ein Eintrag = ein Gedanke. Kurz und sauber. Mehrere Schritte lieber als mehrere Einträge.
+- latex: KaTeX-kompatibel, ohne $-Zeichen. Mehrzeilig mit \\begin{aligned} ... \\end{aligned}.
+- text: kurzer Satz, Mathe darin mit $...$.
+- Schreib an die Tafel, bevor oder während du darüber sprichst.`;
+
+const TOOLS = [{
+  functionDeclarations: [
+    {
+      name: 'zeige_notiz',
+      description: 'Schreibt eine Formel, einen Rechenschritt, eine Definition oder einen Kerngedanken gut lesbar an die Tafel neben dem Blatt des Studenten.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          titel: { type: 'STRING', description: 'Sehr kurze Überschrift, z. B. "Kettenregel" oder "Schritt 2".' },
+          latex: { type: 'STRING', description: 'Formel in KaTeX-kompatiblem LaTeX, ohne $-Zeichen. Optional.' },
+          text: { type: 'STRING', description: 'Kurze Erklärung in einem Satz. Inline-Mathe mit $...$. Optional.' }
+        }
+      }
+    },
+    {
+      name: 'tafel_leeren',
+      description: 'Wischt die Tafel komplett leer, z. B. wenn ein neues Thema oder eine neue Aufgabe beginnt.',
+      parameters: { type: 'OBJECT', properties: {} }
+    }
+  ]
+}];
+
+let ws = null;
+let setupDone = false;
+let wantLive = false;
+let resumeHandle = null;
+let reconnects = 0;
+let snapTimer = null;
+let lastSnap = 0;
+
+function ready() { return ws && ws.readyState === WebSocket.OPEN && setupDone; }
+function send(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
+
+function setStatus(kind, text) {
+  $('dot').className = 'dot ' + (kind || '');
+  $('statusText').textContent = text;
+}
+let speaking = false;
+function setSpeaking(on) {
+  speaking = on;
+  if (ready()) setStatus(on ? 'speaking' : 'live', on ? 'KI spricht' : (muted ? 'Live (stumm)' : 'Live'));
+}
+
+function connect() {
+  const key = settings.key;
+  const url = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(key);
+  setupDone = false;
+  setStatus('connecting', 'Verbinde…');
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    const generationConfig = { responseModalities: ['AUDIO'] };
+    if (settings.voice) {
+      generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: settings.voice } } };
+    }
+    const setup = {
+      model: 'models/' + settings.model,
+      generationConfig,
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      tools: TOOLS,
+      outputAudioTranscription: {},
+      contextWindowCompression: { slidingWindow: {} },
+      sessionResumption: resumeHandle ? { handle: resumeHandle } : {}
+    };
+    send({ setup });
+  };
+
+  ws.onmessage = async (ev) => {
+    let msg;
+    try {
+      const raw = typeof ev.data === 'string' ? ev.data : await ev.data.text();
+      msg = JSON.parse(raw);
+    } catch (e) { return; }
+    handle(msg);
+  };
+
+  ws.onerror = () => {};
+
+  ws.onclose = (ev) => {
+    const wasReady = setupDone;
+    setupDone = false;
+    ws = null;
+    stopPlayback();
+    if (!wantLive) { setStatus('', 'Offline'); return; }
+    if (wasReady && reconnects < 5) {
+      // Verbindung lief schon: still neu verbinden (Session wird fortgesetzt)
+      reconnects++;
+      setStatus('connecting', 'Verbinde neu…');
+      setTimeout(() => { if (wantLive) connect(); }, 600);
+      return;
+    }
+    const reason = ev.reason || ('Code ' + ev.code);
+    toast('Verbindung beendet: ' + reason, 10000);
+    stopLive();
+  };
+}
+
+function handle(msg) {
+  if (msg.setupComplete) {
+    setupDone = true;
+    reconnects = 0;
+    setSpeaking(false);
+    dirty = true;
+    sendSnapshot(true);
+    return;
+  }
+  if (msg.sessionResumptionUpdate) {
+    const u = msg.sessionResumptionUpdate;
+    if (u.resumable && u.newHandle) resumeHandle = u.newHandle;
+  }
+  if (msg.goAway) {
+    // Server trennt gleich – onclose verbindet automatisch neu
+  }
+  if (msg.toolCall && msg.toolCall.functionCalls) {
+    const responses = [];
+    for (const fc of msg.toolCall.functionCalls) {
+      const args = fc.args || {};
+      let result = 'ok';
+      try {
+        if (fc.name === 'zeige_notiz') { addNote(args); result = 'Steht an der Tafel.'; }
+        else if (fc.name === 'tafel_leeren') { notesEl.innerHTML = ''; result = 'Tafel ist leer.'; }
+        else result = 'Unbekanntes Werkzeug';
+      } catch (e) { result = 'Fehler: ' + e.message; }
+      responses.push({ id: fc.id, name: fc.name, response: { result } });
+    }
+    send({ toolResponse: { functionResponses: responses } });
+  }
+  const sc = msg.serverContent;
+  if (sc) {
+    if (sc.interrupted) { stopPlayback(); caption('', true); }
+    if (sc.modelTurn && sc.modelTurn.parts) {
+      for (const part of sc.modelTurn.parts) {
+        if (part.inlineData && part.inlineData.data && /audio/.test(part.inlineData.mimeType || 'audio')) {
+          playPcm(part.inlineData.data, part.inlineData.mimeType);
+        }
+      }
+    }
+    if (sc.outputTranscription && sc.outputTranscription.text) caption(sc.outputTranscription.text);
+    if (sc.turnComplete) { /* Runde vorbei */ }
+  }
+}
+
+function sendSnapshot(force) {
+  if (!ready()) return;
+  const now = Date.now();
+  if (!force && (!dirty || now - lastSnap < 1200)) return;
+  dirty = false;
+  lastSnap = now;
+  send({ realtimeInput: { video: { data: snapshotBase64(), mimeType: 'image/jpeg' } } });
+}
+
+async function startLive() {
+  if (!settings.key) { openSettings(); toast('Bitte zuerst deinen API-Key eintragen.'); return; }
+  if (!window.isSecureContext || !navigator.mediaDevices) {
+    toast('Mikrofon braucht HTTPS. Öffne die App über deine GitHub-Pages-Adresse.', 10000);
+    return;
+  }
+  wantLive = true;
+  resumeHandle = null;
+  reconnects = 0;
+  $('liveBtn').textContent = 'Beenden';
+  $('liveBtn').classList.add('on');
+  $('micBtn').disabled = false;
+  try {
+    ensureOut();
+    await startMic();
+  } catch (e) {
+    toast('Mikrofon nicht verfügbar: ' + (e.message || e.name), 10000);
+    stopLive();
+    return;
+  }
+  connect();
+  snapTimer = setInterval(() => sendSnapshot(false), 400);
+}
+
+function stopLive() {
+  wantLive = false;
+  clearInterval(snapTimer);
+  if (ws) { try { ws.close(); } catch (e) {} }
+  ws = null;
+  setupDone = false;
+  stopMic();
+  stopPlayback();
+  muted = false;
+  $('micBtn').classList.remove('active');
+  $('micBtn').disabled = true;
+  $('liveBtn').textContent = 'Live starten';
+  $('liveBtn').classList.remove('on');
+  setStatus('', 'Offline');
+}
+
+$('liveBtn').onclick = () => { wantLive ? stopLive() : startLive(); };
+$('micBtn').onclick = () => {
+  muted = !muted;
+  $('micBtn').classList.toggle('active', muted);
+  $('micBtn').title = muted ? 'Mikro an' : 'Mikro stumm';
+  if (muted && ready()) send({ realtimeInput: { audioStreamEnd: true } });
+  setSpeaking(speaking);
+};
+
+/* =========================================================
+   Einstellungen-Dialog
+   ========================================================= */
+function openSettings() {
+  $('keyInput').value = settings.key;
+  $('modelInput').value = settings.model;
+  $('voiceInput').value = settings.voice;
+  $('settingsModal').classList.add('show');
+}
+function closeSettings() { $('settingsModal').classList.remove('show'); }
+$('settingsBtn').onclick = openSettings;
+$('settingsCancel').onclick = closeSettings;
+$('settingsSave').onclick = () => {
+  store.set('lb_key', $('keyInput').value.trim());
+  store.set('lb_model', $('modelInput').value.trim() || DEFAULT_MODEL);
+  store.set('lb_voice', $('voiceInput').value);
+  closeSettings();
+  if (wantLive) toast('Gespeichert. Starte Live neu, damit die Änderungen greifen.');
+};
+
+if (!settings.key) setTimeout(openSettings, 300);
+})();
+</script>
+</body>
+</html>
