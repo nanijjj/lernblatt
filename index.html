@@ -57,7 +57,10 @@
   .livebtn:hover { background: #255fd6; }
   .livebtn.on { background: var(--live); }
   .livebtn.on:hover { background: #cf3a3f; }
-  .status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding: 0 6px; }
+  /* Feste Breite, damit die Leiste beim Statuswechsel nicht umbricht */
+  .status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding: 0 6px;
+    width: 104px; flex: none; white-space: nowrap; overflow: hidden; }
+  #statusText { overflow: hidden; text-overflow: ellipsis; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #b7bec8; }
   .dot.connecting { background: #f2a93b; }
   .dot.live { background: var(--ok); }
@@ -75,8 +78,13 @@
   .caption.show { opacity: 1; }
 
   /* ---------- Panel ---------- */
-  .panel { width: 34%; min-width: 280px; max-width: 480px; display: flex; flex-direction: column;
-    background: var(--panel); border-left: 1px solid var(--line); }
+  .panel { width: 34%; min-width: 0; display: flex; flex-direction: column; flex: none;
+    background: var(--panel); }
+  /* Griff zum Größerziehen der Tafel */
+  .splitter { flex: none; width: 14px; background: var(--panel); border-left: 1px solid var(--line);
+    cursor: col-resize; touch-action: none; display: flex; align-items: center; justify-content: center; }
+  .splitter span { width: 4px; height: 44px; border-radius: 2px; background: #c3cad3; transition: background .15s; }
+  .splitter:hover span, .splitter.drag span { background: var(--accent); }
   .panel-head { display: flex; align-items: center; justify-content: space-between;
     padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--line); }
   .panel-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
@@ -128,7 +136,9 @@
   /* Hochformat: Panel nach unten */
   @media (orientation: portrait), (max-width: 760px) {
     .main { flex-direction: column; }
-    .panel { width: 100%; max-width: none; min-width: 0; height: 34%; border-left: none; border-top: 1px solid var(--line); }
+    .panel { width: 100%; height: 34%; }
+    .splitter { width: 100%; height: 14px; border-left: none; border-top: 1px solid var(--line); cursor: row-resize; }
+    .splitter span { width: 44px; height: 4px; }
   }
 </style>
 </head>
@@ -197,7 +207,8 @@
       <canvas id="ink"></canvas>
       <div class="caption" id="caption"></div>
     </div>
-    <aside class="panel">
+    <div class="splitter" id="splitter" title="Ziehen, um die Tafel größer oder kleiner zu machen"><span></span></div>
+    <aside class="panel" id="panel">
       <div class="panel-head">
         <h2>Tafel</h2>
         <button id="panelClear" title="Tafel leeren">Leeren</button>
@@ -438,14 +449,25 @@ function zoomAt(px, py, f) {
   scheduleRender();
 }
 
+let lastRect = null;
 function resize() {
   dpr = window.devicePixelRatio || 1;
   const r = board.getBoundingClientRect();
+  // Verschiebt sich die Zeichenfläche (z. B. weil sich die Leiste ändert),
+  // die Seite gegenläufig verschieben – sie bleibt so exakt an derselben Stelle.
+  if (lastRect && fitted) {
+    view.x -= r.left - lastRect.left;
+    view.y -= r.top - lastRect.top;
+  }
+  const sameSize = lastRect && r.width === lastRect.width && r.height === lastRect.height && dpr === lastRect.dpr;
+  lastRect = { left: r.left, top: r.top, width: r.width, height: r.height, dpr };
   W = r.width; H = r.height;
-  canvas.width = Math.max(1, Math.round(W * dpr));
-  canvas.height = Math.max(1, Math.round(H * dpr));
+  if (!sameSize) {
+    canvas.width = Math.max(1, Math.round(W * dpr));
+    canvas.height = Math.max(1, Math.round(H * dpr));
+  }
   if (!fitted) fitWidth();
-  scheduleRender();
+  render(); // sofort neu zeichnen, kein leeres Bild dazwischen
 }
 window.addEventListener('resize', resize);
 new ResizeObserver(resize).observe(board);
@@ -1385,6 +1407,78 @@ if (!fsSupported) {
   document.addEventListener('fullscreenchange', updateFsIcon);
   document.addEventListener('webkitfullscreenchange', updateFsIcon);
 }
+
+/* =========================================================
+   Tafel größer/kleiner ziehen
+   ========================================================= */
+const panelEl = $('panel');
+const splitter = $('splitter');
+const mainEl = document.querySelector('.main');
+const stacked = matchMedia('(orientation: portrait), (max-width: 760px)');
+
+function applyPanelSize() {
+  if (stacked.matches) {
+    panelEl.style.width = '';
+    const h = parseFloat(store.get('lb_panelH', ''));
+    panelEl.style.height = h ? h + 'px' : '';
+  } else {
+    panelEl.style.height = '';
+    const w = parseFloat(store.get('lb_panelW', ''));
+    panelEl.style.width = w ? w + 'px' : '';
+  }
+}
+function limitPanel() {
+  // Bei Drehung/Größenänderung sicherstellen, dass Blatt und Tafel Platz haben
+  const m = mainEl.getBoundingClientRect();
+  if (stacked.matches) {
+    const h = panelEl.getBoundingClientRect().height;
+    const max = m.height - 160;
+    if (h > max) panelEl.style.height = Math.max(90, max) + 'px';
+  } else {
+    const w = panelEl.getBoundingClientRect().width;
+    const max = m.width - 240;
+    if (w > max) panelEl.style.width = Math.max(180, max) + 'px';
+  }
+}
+
+let drag = null;
+splitter.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  try { splitter.setPointerCapture(e.pointerId); } catch (err) {}
+  const pr = panelEl.getBoundingClientRect();
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, w: pr.width, h: pr.height };
+  splitter.classList.add('drag');
+});
+splitter.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const m = mainEl.getBoundingClientRect();
+  if (stacked.matches) {
+    const h = clamp(drag.h - (e.clientY - drag.y), 90, m.height - 160);
+    panelEl.style.height = h + 'px';
+  } else {
+    const w = clamp(drag.w - (e.clientX - drag.x), 180, m.width - 240);
+    panelEl.style.width = w + 'px';
+  }
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag = null;
+  splitter.classList.remove('drag');
+  const pr = panelEl.getBoundingClientRect();
+  if (stacked.matches) store.set('lb_panelH', String(Math.round(pr.height)));
+  else store.set('lb_panelW', String(Math.round(pr.width)));
+}
+splitter.addEventListener('pointerup', endDrag);
+splitter.addEventListener('pointercancel', endDrag);
+// Doppeltipp auf den Griff: Standardgröße
+splitter.addEventListener('dblclick', () => {
+  store.del(stacked.matches ? 'lb_panelH' : 'lb_panelW');
+  applyPanelSize();
+});
+if (stacked.addEventListener) stacked.addEventListener('change', () => { applyPanelSize(); limitPanel(); });
+window.addEventListener('resize', limitPanel);
+applyPanelSize();
+limitPanel();
 
 /* Start */
 resize();
