@@ -181,6 +181,9 @@
       </button>
     </div>
     <div class="spacer"></div>
+    <button id="fsBtn" title="Vollbild">
+      <svg class="i" id="fsIcon" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
     <button id="exportBtn" title="Exportieren">
       <svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
     </button>
@@ -1351,6 +1354,37 @@ $('settingsSave').onclick = () => {
   closeSettings();
   if (wantLive) toast('Gespeichert. Starte Live neu, damit die Änderungen greifen.', 6000, true);
 };
+
+/* =========================================================
+   Vollbild
+   ========================================================= */
+const root = document.documentElement;
+const fsSupported = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+function updateFsIcon() {
+  const on = !!fsElement();
+  $('fsIcon').innerHTML = on
+    ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>'
+    : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>';
+  $('fsBtn').title = on ? 'Vollbild beenden' : 'Vollbild';
+}
+if (!fsSupported) {
+  $('fsBtn').style.display = 'none';
+} else {
+  $('fsBtn').onclick = async () => {
+    try {
+      if (fsElement()) {
+        await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen());
+      } else {
+        await (root.requestFullscreen ? root.requestFullscreen({ navigationUI: 'hide' }) : root.webkitRequestFullscreen());
+      }
+    } catch (e) {
+      toast('Vollbild wird von diesem Browser nicht erlaubt.', 5000);
+    }
+  };
+  document.addEventListener('fullscreenchange', updateFsIcon);
+  document.addEventListener('webkitfullscreenchange', updateFsIcon);
+}
 
 /* Start */
 resize();
